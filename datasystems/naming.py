@@ -1,14 +1,15 @@
 from __future__ import annotations # from DataSystems
 
 import os
+import json
 from pathlib import Path
-from typing import List
+from typing import Iterable, List
 
 class DataSystem:
 
     root: Path
     hierarchy: List[str]
-    __config_name: str = '.datasystems-config.txt'
+    __config_name: str = '.datasystems-config.json'
 
     def __init__(self, root: Path|str, hierarchy: List[str]) -> None:
         # Initialize a DataSystem object
@@ -19,9 +20,11 @@ class DataSystem:
         self.root = Path(root)
         
         # Find config if exists, and validate hierarchy
-        config = self.find_config(self.root)
-        if config:
-            assert self.read_config(config) == hierarchy, f'Invalid hierarchy for root={self.root}. Given={hierarchy}, found={config}'
+        config_file = self.find_config(self.root)
+        config = self.read_config(config_file) if config_file else {}
+        if config_file:
+            _hierarchy = config['hierarchy']
+            assert _hierarchy==hierarchy, f'Invalid hierarchy for root={self.root}. Given={hierarchy}, found={_hierarchy}'
 
         # Set hierarchy
         self.hierarchy = hierarchy
@@ -31,23 +34,25 @@ class DataSystem:
             os.mkdir(self.root)
 
         # Create config if necessary
-        if not config:
-            self.write_config(self.root, self.hierarchy)
+        if not config_file:
+            config['hierarchy'] = hierarchy
+            config['structure'] = {}
+            self.write_config(self.root, config)
 
     @staticmethod
-    def write_config(root: Path, hierarchy: List):
+    def write_config(root: Path, config: dict) -> None:
         # Write configuration to file
         with open(os.path.join(root, DataSystem.__config_name), 'w+') as f:
-            f.write('\n'.join(hierarchy))
+            f.write(json.dumps(config))
 
     @staticmethod
-    def read_config(config_file: Path):
+    def read_config(config_file: Path) -> dict:
         # Read config file
         with open(config_file, 'r') as f:
-            return f.read().strip().split('\n')
+            return json.loads(f.read())
 
     @staticmethod
-    def find_config(root: Path):
+    def find_config(root: Path) -> Path:
         # Find config file in root directory
         try:
             return Path(os.path.join(root, next(Path(root).rglob(DataSystem.__config_name))))
@@ -82,15 +87,73 @@ class DataSystem:
         return Path(os.path.join(*path))
 
     @staticmethod
-    def from_config(root, config: Path) -> DataSystem:
+    def from_config(root, config: dict) -> DataSystem:
         # Create a DataSystem from a root folder and a config file
-        return DataSystem(root, DataSystem.read_config(config))
+        return DataSystem(root, **config)
 
     @staticmethod
     def from_root(root) -> DataSystem:
         # Create a DataSystem from a root folder
-        config = DataSystem.find_config(root)
-        if config:
-            return DataSystem(root=root, config=DataSystem.read_config(config))
+        config_file = DataSystem.find_config(root)
+        if config_file:
+            return DataSystem(root, **DataSystem.read_config(config_file))
         else:
             raise ValueError(f'Cannot create DataSystem: root {root} does not contain {DataSystem.__config_name}')
+
+    @staticmethod
+    def navigate_structures(keys, structure):
+        target = structure
+        for key in keys:
+            if key in target:
+                target = target[key]
+            else:
+                target = target[key] = {}
+        return target
+
+    def make_meta_entry(self, path: Path, schema: dict) -> dict:
+        # Make structures entry
+
+        # If path is absolute, convert path to relative path from DATA_ROOT/PACKAGE_KEY 
+        # i.e. /usr/../home/ise/ise-data-storage/fmp/fooo/bar -> foo/bar
+        if os.path.isabs(path):
+            relpath = os.path.relpath(path, self.root)
+        else:
+            relpath = path
+
+        return {"path": relpath, "schema": schema}
+
+    def add(self, path: Path, schema: dict) -> None:
+
+        meta_entry = self.make_meta_entry(path, schema)
+        keys = meta_entry['path'].split(os.path.sep)
+
+        config_file = self.find_config()
+        config = self.read_config(config_file)
+
+        target = self.navigate_structures(keys, config['structure'])
+        target.update(meta_entry)
+
+        self.write_config(self.root, config)
+
+    def structure(self):
+        return self.read_config(self.find_config(self.root))['structure']
+
+    def iter_entries(self) -> Iterable[dict]:
+        # Iterate over entries in strucures. 
+
+        l = [struct for struct in self.structure() if isinstance(struct, dict)]
+
+        for struct in l:
+            if 'schema' in struct.keys():
+                yield struct
+            else:
+                for child in struct.values():
+                    if isinstance(child, dict):
+                        l.append(child)
+
+    def find(self, key) -> Iterable[dict]:
+        # Iterate over entries where key is in schema, and period is correct
+
+        for entry in self.iter_entries():
+            if key in entry['schema']:
+                yield key
