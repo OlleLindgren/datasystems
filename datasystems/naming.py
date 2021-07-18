@@ -166,21 +166,25 @@ class DataSystem:
                 yield key
 
     def infer_structure(self, glob_string: str, schema_fun: Callable, cut_levels=0) -> None:
-        for file in sorted(self.root.rglob(glob_string)):
-            # Infer keys from file
-            keys = self.infer_keys(file)
-            # If too many, remove the last one (hopefully the filename, so the folder will fit)
-            if len(keys) > len(self.hierarchy):
-                keys = keys[:-1]
-            # Check valid hierarchy
-            assert len(keys) == len(self.hierarchy), f'failed to fit file {file} int hierarchy {self.hierarchy}'
-            # Create schema with user-provided callable
-            schema = schema_fun(file)
-            # Add path is the (cut_levels)'th parent of this leaf
-            if cut_levels == 0:
-                add_path = self.name(*keys)
-            else:
-                if len(keys) < len(self.hierarchy):
-                    add_path = self.name(*keys, *['a' for _ in range(cut_levels)])
-                add_path = add_path.parents[cut_levels-1]
-            self.add(add_path, schema)
+        for i, file in enumerate(sorted(self.root.rglob(glob_string))):
+            try:
+                # Infer keys from file
+                keys = self.infer_keys(file)
+                # If too many, remove the last one (hopefully the filename, so the folder will fit)
+                if len(keys) > len(self.hierarchy):
+                    keys = keys[:-1]
+                # Check valid hierarchy
+                assert len(keys) == len(self.hierarchy), f'failed to fit file {file} int hierarchy {self.hierarchy}'
+                # Create schema with user-provided callable
+                schema = schema_fun(file)
+                # Add path is the (cut_levels)'th parent of this leaf
+                if cut_levels == 0:
+                    add_path = self.name(*keys)
+                else:
+                    assert len(keys)+cut_levels >= len(self.hierarchy), f'invalid file: {file}'
+                    while len(keys) < len(self.hierarchy):
+                        keys.append('a')
+                    add_path = self.name(*keys).parents[cut_levels-1]
+                self.add(add_path, schema)
+            except AssertionError as a:
+                print(f'Skipping file {i+1}: {file} due to AssertionError: {a}')
