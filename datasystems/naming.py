@@ -101,7 +101,7 @@ class DataSystem:
             raise ValueError(f'Cannot create DataSystem: root {root} does not contain {DataSystem.__config_name}')
 
     @staticmethod
-    def navigate_structures(keys, structure):
+    def navigate_structures(keys, structure) -> dict:
         refs = [structure]
         for key in keys:
             if key in refs[-1]:
@@ -165,7 +165,7 @@ class DataSystem:
             if key in entry['schema']:
                 yield key
 
-    def infer_structure(self, glob_string: str, schema_fun: Callable) -> None:
+    def infer_structure(self, glob_string: str, schema_fun: Callable, cut_levels=0) -> None:
         for file in sorted(self.root.rglob(glob_string)):
             # Infer keys from file
             keys = self.infer_keys(file)
@@ -176,6 +176,8 @@ class DataSystem:
             assert len(keys) == len(self.hierarchy), f'failed to fit file {file} int hierarchy {self.hierarchy}'
             # Create schema with user-provided callable
             schema = schema_fun(file)
-            # Add entry
-            self.add(self.name(*keys), schema)
-    
+            # Add path is the (cut_levels)'th parent of this leaf
+            add_path = self.name(*keys)
+            if cut_levels > 0:
+                add_path = add_path.parents[cut_levels-1]
+            self.add(add_path, schema)
