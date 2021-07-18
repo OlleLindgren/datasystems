@@ -3,7 +3,7 @@ from __future__ import annotations # from DataSystems
 import os
 import json
 from pathlib import Path
-from typing import Iterable, List
+from typing import Callable, Iterable, List
 
 class DataSystem:
 
@@ -43,7 +43,7 @@ class DataSystem:
     def write_config(root: Path, config: dict) -> None:
         # Write configuration to file
         with open(os.path.join(root, DataSystem.__config_name), 'w+') as f:
-            f.write(json.dumps(config))
+            f.write(json.dumps(config, indent=2))
 
     @staticmethod
     def read_config(config_file: Path) -> dict:
@@ -102,13 +102,14 @@ class DataSystem:
 
     @staticmethod
     def navigate_structures(keys, structure):
-        target = structure
+        refs = [structure]
         for key in keys:
-            if key in target:
-                target = target[key]
+            if key in refs[-1]:
+                refs.append(refs[-1][key])
             else:
-                target = target[key] = {}
-        return target
+                refs[-1][key] = {}
+                refs.append(refs[-1][key])
+        return refs[-1]
 
     def make_meta_entry(self, path: Path, schema: dict) -> dict:
         # Make structures entry
@@ -127,13 +128,19 @@ class DataSystem:
         meta_entry = self.make_meta_entry(path, schema)
         keys = meta_entry['path'].split(os.path.sep)
 
-        config_file = self.find_config()
+        config_file = self.find_config(self.root)
         config = self.read_config(config_file)
 
-        target = self.navigate_structures(keys, config['structure'])
-        target.update(meta_entry)
+        self.navigate_structures(keys, config['structure']).update(meta_entry)
 
         self.write_config(self.root, config)
+
+    def infer_keys(self, path: Path):
+        # Infer keys from path
+        if os.path.isabs(path):
+            return os.path.relpath(path, self.root).split(os.path.sep)
+        else:
+            return str(path).split(os.path.sep)
 
     def structure(self):
         return self.read_config(self.find_config(self.root))['structure']
@@ -157,3 +164,18 @@ class DataSystem:
         for entry in self.iter_entries():
             if key in entry['schema']:
                 yield key
+
+    def infer_structure(self, glob_string: str, schema_fun: Callable) -> None:
+        for file in sorted(self.root.rglob(glob_string)):
+            # Infer keys from file
+            keys = self.infer_keys(file)
+            # If too many, remove the last one (hopefully the filename, so the folder will fit)
+            if len(keys) > len(self.hierarchy):
+                keys = keys[:-1]
+            # Check valid hierarchy
+            assert len(keys) == len(self.hierarchy), f'failed to fit file {file} int hierarchy {self.hierarchy}'
+            # Create schema with user-provided callable
+            schema = schema_fun(file)
+            # Add entry
+            self.add(self.name(*keys), schema)
+    
