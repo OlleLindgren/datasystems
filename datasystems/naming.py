@@ -177,7 +177,10 @@ class DataSystem:
             # Create schema with user-provided callable
             schema = schema_fun(file)
             # Add path is the (cut_levels)'th parent of this leaf
-            add_path = self.name(*keys)
-            if cut_levels > 0:
+            if cut_levels == 0:
+                add_path = self.name(*keys)
+            else:
+                if len(keys) < len(self.hierarchy):
+                    add_path = self.name(*keys, *['a' for _ in range(cut_levels)])
                 add_path = add_path.parents[cut_levels-1]
             self.add(add_path, schema)
