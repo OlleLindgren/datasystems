@@ -164,12 +164,31 @@ class DataSystem:
                     if isinstance(child, dict):
                         l.append(child)
 
-    def find(self, key: str) -> Iterable[dict]:
-        # Iterate over entries where key is in schema, and period is correct
+    def find(self, key: str, **filters) -> Iterable[dict]:
+        # Iterate over entries where key is in schema, and filters are OK
 
         for entry in self.iter_entries():
-            if key in entry['schema']:
-                yield key
+            if key in entry['schema'].keys():
+                if filters:
+                    # Infer system keys, and use system keys to get absolute name
+                    system_keys = self.infer_keys(entry['path'])
+
+                    # Build proper system key dictionary. This way, we are not dependent on
+                    # the order of the keys in the datasystem hierarchy.
+                    system_keys_dict = {
+                        k: v
+                        for k, v in zip(self.hierarchy, system_keys)
+                    }
+
+                    # All filters ok, key ok => yield entry
+                    if all((
+                        k in system_keys_dict and system_keys_dict[k]==v
+                        for k, v in filters.items()
+                    )):
+                        yield entry
+                else:
+                    # No filters, key ok => yield entry
+                    yield entry
 
     def infer_structure(self, glob_string: str, schema_fun: Callable, cut_levels: int=0) -> None:
         for i, file in enumerate(sorted(self.root.rglob(glob_string))):
