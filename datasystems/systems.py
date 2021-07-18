@@ -151,22 +151,22 @@ class DataSystem:
     def structure(self) -> dict:
         return self.read_config(self.find_config(self.root))['structure']
 
+    @staticmethod
+    def __iter_dict(dictionary: dict) -> Iterable[dict]:
+        yield from dictionary.values()
+
     def iter_entries(self) -> Iterable[dict]:
         # Iterate over entries in strucures. 
-
-        l = [struct for struct in self.structure() if isinstance(struct, dict)]
-
-        for struct in l:
-            if 'schema' in struct.keys():
-                yield struct
-            else:
-                for child in struct.values():
-                    if isinstance(child, dict):
-                        l.append(child)
+        _structure = self.structure()
+        for entry in self.__iter_dict(_structure):
+            if isinstance(entry, dict):
+                if 'schema' in entry:
+                    yield entry
+                else:
+                    yield from self.__iter_dict(entry)
 
     def find(self, key: str, **filters) -> Iterable[dict]:
         # Iterate over entries where key is in schema, and filters are OK
-
         for entry in self.iter_entries():
             if key in entry['schema'].keys():
                 if filters:
