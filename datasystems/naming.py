@@ -11,7 +11,7 @@ class DataSystem:
     hierarchy: List[str]
     __config_filename: str = '.datasystems-config.json'
 
-    def __init__(self, root: Path|str, hierarchy: List[str]) -> None:
+    def __init__(self, root: Path, hierarchy: List[str]) -> None:
         # Initialize a DataSystem object
 
         # Validate and set root
@@ -66,12 +66,12 @@ class DataSystem:
         return DataSystem.find_config(root) is not None
 
     @staticmethod
-    def from_config(root, config: dict) -> DataSystem:
+    def from_config(root: Path, config: dict) -> DataSystem:
         # Create a DataSystem from a root folder and a config file
         return DataSystem(root, **config)
 
     @staticmethod
-    def from_root(root) -> DataSystem:
+    def from_root(root: Path) -> DataSystem:
         # Create a DataSystem from a root folder
         config_file = DataSystem.find_config(root)
         if config_file:
@@ -164,14 +164,14 @@ class DataSystem:
                     if isinstance(child, dict):
                         l.append(child)
 
-    def find(self, key) -> Iterable[dict]:
+    def find(self, key: str) -> Iterable[dict]:
         # Iterate over entries where key is in schema, and period is correct
 
         for entry in self.iter_entries():
             if key in entry['schema']:
                 yield key
 
-    def infer_structure(self, glob_string: str, schema_fun: Callable, cut_levels=0) -> None:
+    def infer_structure(self, glob_string: str, schema_fun: Callable, cut_levels: int=0) -> None:
         for i, file in enumerate(sorted(self.root.rglob(glob_string))):
             try:
                 # Infer keys from file
