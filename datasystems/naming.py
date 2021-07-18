@@ -9,7 +9,7 @@ class DataSystem:
 
     root: Path
     hierarchy: List[str]
-    __config_name: str = '.datasystems-config.json'
+    __config_filename: str = '.datasystems-config.json'
 
     def __init__(self, root: Path|str, hierarchy: List[str]) -> None:
         # Initialize a DataSystem object
@@ -42,7 +42,7 @@ class DataSystem:
     @staticmethod
     def write_config(root: Path, config: dict) -> None:
         # Write configuration to file
-        with open(os.path.join(root, DataSystem.__config_name), 'w+') as f:
+        with open(os.path.join(root, DataSystem.__config_filename), 'w+') as f:
             f.write(json.dumps(config, indent=2))
 
     @staticmethod
@@ -54,10 +54,30 @@ class DataSystem:
     @staticmethod
     def find_config(root: Path) -> Path:
         # Find config file in root directory
-        try:
-            return Path(os.path.join(root, next(Path(root).rglob(DataSystem.__config_name))))
-        except StopIteration:
+        _config_filename = Path(os.path.join(root, DataSystem.__config_filename))
+        if os.path.isfile(_config_filename):
+            return _config_filename
+        else:
             return None
+
+    @staticmethod
+    def is_system(root: Path) -> bool:
+        # Check if a directory is a datasystem
+        return DataSystem.find_config(root) is not None
+
+    @staticmethod
+    def from_config(root, config: dict) -> DataSystem:
+        # Create a DataSystem from a root folder and a config file
+        return DataSystem(root, **config)
+
+    @staticmethod
+    def from_root(root) -> DataSystem:
+        # Create a DataSystem from a root folder
+        config_file = DataSystem.find_config(root)
+        if config_file:
+            return DataSystem(root, **DataSystem.read_config(config_file))
+        else:
+            raise ValueError(f'Cannot create DataSystem: root {root} does not contain {DataSystem.__config_filename}')
 
     def name(self, *args, **kwargs) -> Path:
         # Get name of entry
@@ -85,20 +105,6 @@ class DataSystem:
         assert len(path) == len(self.hierarchy)+1, f'Argument count must exactly match hierarchy: {len(path)-1}!={len(self.hierarchy)}'
 
         return Path(os.path.join(*path))
-
-    @staticmethod
-    def from_config(root, config: dict) -> DataSystem:
-        # Create a DataSystem from a root folder and a config file
-        return DataSystem(root, **config)
-
-    @staticmethod
-    def from_root(root) -> DataSystem:
-        # Create a DataSystem from a root folder
-        config_file = DataSystem.find_config(root)
-        if config_file:
-            return DataSystem(root, **DataSystem.read_config(config_file))
-        else:
-            raise ValueError(f'Cannot create DataSystem: root {root} does not contain {DataSystem.__config_name}')
 
     @staticmethod
     def navigate_structures(keys, structure) -> dict:
@@ -142,7 +148,7 @@ class DataSystem:
         else:
             return str(path).split(os.path.sep)
 
-    def structure(self):
+    def structure(self) -> dict:
         return self.read_config(self.find_config(self.root))['structure']
 
     def iter_entries(self) -> Iterable[dict]:
