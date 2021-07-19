@@ -2,8 +2,11 @@ from __future__ import annotations # from DataSystems
 
 import os
 import json
+import re
 from pathlib import Path
-from typing import Callable, Iterable, List
+from typing import Callable, Counter, Iterable, List, Tuple
+
+FILENAME_REGEX = re.compile(r"[^a-zA-Z0-9-]")
 
 class DataSystem:
 
@@ -80,7 +83,7 @@ class DataSystem:
             raise ValueError(f'Cannot create DataSystem: root {root} does not contain {DataSystem.__config_filename}')
 
     def name(self, *args, **kwargs) -> Path:
-        # Get name of entry
+        # Get filename of entry
 
         # Set index of argument currently being parsed
         _index=0
@@ -90,14 +93,14 @@ class DataSystem:
 
         # Add args to path
         for arg in args:
-            path.append(arg)
+            path.append(DataSystem.sanitize_string(arg))
             _index += 1
 
         # Add kwargs to path. assert kwargs correctly given in relation to hierarchy.
         for k, v in kwargs.items():
             assert _index < len(self.hierarchy), f'Too many arguments: {args}, {kwargs}'
             assert k==self.hierarchy[_index], f'Invalid argument order: {args}, {kwargs}'
-            path.append(v)
+            path.append(DataSystem.sanitize_string(v))
             _index += 1
 
         # Remember, path is a list starting with self.root. 
@@ -165,30 +168,46 @@ class DataSystem:
                 else:
                     yield from self.__iter_dict(entry)
 
+    def sanitize_string(string: str) -> str:
+        return FILENAME_REGEX.sub('', string).strip().lower()
+
     def find(self, key: str, **filters) -> Iterable[dict]:
         # Iterate over entries where key is in schema, and filters are OK
+
+        # Track what entries have been yielded
+        yielded: Counter = Counter()
+        _hash: Callable = lambda entry: sum((hash(k) for k in entry['schema'].keys())) + hash(entry['path'])
+
+        # For every entry in system
         for entry in self.iter_entries():
-            if key in entry['schema'].keys():
-                if filters:
-                    # Infer system keys, and use system keys to get absolute name
-                    system_keys = self.infer_keys(entry['path'])
+            # Iterate over schema keys
+            for k in entry['schema'].keys():
+                # If not already yielded, and matching key
+                if not yielded[_hash(entry)] and DataSystem.sanitize_string(key) == DataSystem.sanitize_string(k):
+                    # If any filters, check them. If not, yield.
+                    if filters:
+                        # Infer system keys, and use system keys to get absolute name
+                        system_keys = self.infer_keys(entry['path'])
 
-                    # Build proper system key dictionary. This way, we are not dependent on
-                    # the order of the keys in the datasystem hierarchy.
-                    system_keys_dict = {
-                        k: v
-                        for k, v in zip(self.hierarchy, system_keys)
-                    }
+                        # Build proper system key dictionary. This way, we are not dependent on
+                        # the order of the keys in the datasystem hierarchy.
+                        system_keys_dict = {
+                            k: v
+                            for k, v in zip(self.hierarchy, system_keys)
+                        }
 
-                    # All filters ok, key ok => yield entry
-                    if all((
-                        k in system_keys_dict and system_keys_dict[k]==v
-                        for k, v in filters.items()
-                    )):
+                        # All filters ok, key ok => yield entry
+                        if all((
+                            k in system_keys_dict and 
+                            DataSystem.sanitize_string(system_keys_dict[k])==DataSystem.sanitize_string(v)
+                            for k, v in filters.items()
+                        )):
+                            yielded[_hash(entry)] = True
+                            yield entry
+                    else:
+                        # No filters, key ok => yield entry
+                        yielded[_hash(entry)] = True
                         yield entry
-                else:
-                    # No filters, key ok => yield entry
-                    yield entry
 
     def infer_structure(self, glob_string: str, schema_fun: Callable, cut_levels: int=0) -> None:
         for i, file in enumerate(sorted(self.root.rglob(glob_string))):
