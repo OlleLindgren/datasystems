@@ -5,4 +5,4 @@ When different packages asyncronously read and write from some set directory, th
 
 # install
 
-`pip install git+https://github.com/OlleLindgren/datasystems@v0.3.3`
+`pip install git+https://github.com/OlleLindgren/datasystems@v0.4`
