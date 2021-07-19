@@ -171,6 +171,43 @@ class DataSystem:
     def sanitize_string(string: str) -> str:
         return FILENAME_REGEX.sub('', string).strip().lower()
 
+    def iter_filter(self, **filters) -> Iterable[dict]:
+        # Iterate over entries where key is in schema, and filters are OK
+
+        # Track what entries have been yielded
+        yielded: Counter = Counter()
+        _hash: Callable = lambda key: sum((hash(k) for k in entry['schema'].keys())) + hash(entry['path'])
+
+        # For every entry in system
+        for entry in self.iter_entries():
+            # Iterate over schema keys
+            # If not already yielded, and matching key
+            if not yielded[_hash(entry)]:
+                # If any filters, check them. If not, yield.
+                if filters:
+                    # Infer system keys, and use system keys to get absolute name
+                    system_keys = self.infer_keys(entry['path'])
+
+                    # Build proper system key dictionary. This way, we are not dependent on
+                    # the order of the keys in the datasystem hierarchy.
+                    system_keys_dict = {
+                        k: v
+                        for k, v in zip(self.hierarchy, system_keys)
+                    }
+
+                    # All filters ok, key ok => yield entry
+                    if all((
+                        k in system_keys_dict and 
+                        DataSystem.sanitize_string(system_keys_dict[k])==DataSystem.sanitize_string(v)
+                        for k, v in filters.items()
+                    )):
+                        yielded[_hash(entry)] = True
+                        yield entry
+                else:
+                    # No filters, key ok => yield entry
+                    yielded[_hash(entry)] = True
+                    yield entry
+
     def find(self, key: str, **filters) -> Iterable[dict]:
         # Iterate over entries where key is in schema, and filters are OK
 
@@ -179,35 +216,14 @@ class DataSystem:
         _hash: Callable = lambda entry: sum((hash(k) for k in entry['schema'].keys())) + hash(entry['path'])
 
         # For every entry in system
-        for entry in self.iter_entries():
+        for entry in self.iter_filter(**filters):
             # Iterate over schema keys
             for k in entry['schema'].keys():
                 # If not already yielded, and matching key
                 if not yielded[_hash(entry)] and DataSystem.sanitize_string(key) == DataSystem.sanitize_string(k):
                     # If any filters, check them. If not, yield.
-                    if filters:
-                        # Infer system keys, and use system keys to get absolute name
-                        system_keys = self.infer_keys(entry['path'])
-
-                        # Build proper system key dictionary. This way, we are not dependent on
-                        # the order of the keys in the datasystem hierarchy.
-                        system_keys_dict = {
-                            k: v
-                            for k, v in zip(self.hierarchy, system_keys)
-                        }
-
-                        # All filters ok, key ok => yield entry
-                        if all((
-                            k in system_keys_dict and 
-                            DataSystem.sanitize_string(system_keys_dict[k])==DataSystem.sanitize_string(v)
-                            for k, v in filters.items()
-                        )):
-                            yielded[_hash(entry)] = True
-                            yield entry
-                    else:
-                        # No filters, key ok => yield entry
-                        yielded[_hash(entry)] = True
-                        yield entry
+                    yielded[_hash(entry)] = True
+                    yield entry
 
     def infer_structure(self, glob_string: str, schema_fun: Callable, cut_levels: int=0) -> None:
         for i, file in enumerate(sorted(self.root.rglob(glob_string))):
