@@ -71,14 +71,14 @@ class DataSystem:
     @staticmethod
     def from_config(root: Path, config: dict) -> DataSystem:
         # Create a DataSystem from a root folder and a config file
-        return DataSystem(root, **config)
+        return DataSystem(root, config['hierarchy'])
 
     @staticmethod
     def from_root(root: Path) -> DataSystem:
         # Create a DataSystem from a root folder
         config_file = DataSystem.find_config(root)
         if config_file:
-            return DataSystem(root, **DataSystem.read_config(config_file))
+            return DataSystem(root, DataSystem.read_config(config_file)['hierarchy'])
         else:
             raise ValueError(f'Cannot create DataSystem: root {root} does not contain {DataSystem.__config_filename}')
 
