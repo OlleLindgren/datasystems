@@ -7,7 +7,7 @@ requirements=['pathvalidate']
 
 setuptools.setup(
     name="datasystems",
-    version="v0.4.2",
+    version="v0.4.3",
     author="Olle Lindgren",
     author_email="lindgrenolle@live.se",
     description="A package for systematically managing data",
