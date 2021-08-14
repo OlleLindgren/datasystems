@@ -3,7 +3,7 @@ import setuptools
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-requirements=[]
+requirements=['pathvalidate']
 
 setuptools.setup(
     name="datasystems",
