@@ -4,7 +4,7 @@ import os
 import json
 from pathlib import Path
 from typing import Callable, Counter, Iterable, List
-from pathvalidate import sanitize_filepath
+from pathvalidate import sanitize_filepath, sanitize_filename
 
 class DataSystem:
 
@@ -91,14 +91,17 @@ class DataSystem:
 
         # Add args to path
         for arg in args:
-            path.append(arg)
+            arg_sanitized = sanitize_filename(arg, platform='auto')
+            path.append(arg_sanitized)
             _index += 1
 
         # Add kwargs to path. assert kwargs correctly given in relation to hierarchy.
         for k, v in kwargs.items():
             assert _index < len(self.hierarchy), f'Too many arguments: {args}, {kwargs}'
             assert k==self.hierarchy[_index], f'Invalid argument order: {args}, {kwargs}'
-            path.append(v)
+
+            v_sanitized = sanitize_filename(v, platform='auto')
+            path.append(v_sanitized)
             _index += 1
 
         # Remember, path is a list starting with self.root. 
@@ -109,9 +112,18 @@ class DataSystem:
 
         result = Path(os.path.join(*path))
 
-        result_sanitized = sanitize_filepath(result, platform='auto')
+        result_sanitized = self.sanitize_path(result)
 
         return result_sanitized
+
+    @staticmethod
+    def sanitize_path(path: Path) -> Path:
+        return Path(sanitize_filepath(path, platform='auto'))
+
+    @staticmethod
+    def sanitize_string(string: str) -> str:
+        # Legacy; delete in future
+        return str(DataSystem.sanitize_path(string))
 
     @staticmethod
     def navigate_structures(keys, structure) -> dict:
@@ -199,7 +211,7 @@ class DataSystem:
                     # All filters ok, key ok => yield entry
                     if all((
                         k in system_keys_dict and 
-                        sanitize_filepath(system_keys_dict[k], platform='auto')==sanitize_filepath(v, platform='auto')
+                        self.sanitize_path(system_keys_dict[k])==self.sanitize_path(v)
                         for k, v in filters.items()
                     )):
                         yielded[_hash(entry)] = True
@@ -221,7 +233,7 @@ class DataSystem:
             # Iterate over schema keys
             for k in entry['schema'].keys():
                 # If not already yielded, and matching key
-                if not yielded[_hash(entry)] and sanitize_filepath(key, platform='auto') == sanitize_filepath(k, platform='auto'):
+                if not yielded[_hash(entry)] and self.sanitize_path(key) == self.sanitize_path(k):
                     # If any filters, check them. If not, yield.
                     yielded[_hash(entry)] = True
                     yield entry
