@@ -110,7 +110,7 @@ class DataSystem:
 
         # Deal with forbidden filenames
 
-        result = Path(os.path.join(*path))
+        result = Path(*path)
 
         result_sanitized = self.sanitize_path(result)
 
